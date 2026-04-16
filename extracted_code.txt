@@ -1,0 +1,530 @@
+============================================================
+CELL 4
+============================================================
+
+import os
+import glob
+from pathlib import Path
+
+# Путь к папке с данными
+DATA_FOLDER = 'data'  # Измените на ваш путь, например: '/content/data' или 'C:/Data'
+
+def find_comtrade_files(folder_path):
+    """Поиск всех пар .cfg и .dat файлов в папке"""
+    cfg_files = glob.glob(os.path.join(folder_path, '*.cfg'))
+    comtrade_pairs = []
+    
+    for cfg_path in cfg_files:
+        base_name = cfg_path[:-4]  # убираем .cfg
+        dat_path = base_name + '.dat'
+        
+        if os.path.exists(dat_path):
+            comtrade_pairs.append({
+                'cfg': cfg_path,
+                'dat': dat_path,
+                'name': os.path.basename(base_name)
+            })
+        else:
+            print(f"⚠️  Предупреждение: для {cfg_path} не найден .dat файл")
+    
+    return comtrade_pairs
+
+# Поиск файлов
+comtrade_files = find_comtrade_files(DATA_FOLDER)
+
+print(f"✓ Найдено {len(comtrade_files)} пар COMTRADE-файлов:")
+for i, pair in enumerate(comtrade_files, 1):
+    cfg_path = pair['cfg']
+    print(f"  {i}. {pair['name']}")
+    print(f"     cfg: {cfg_path}")
+    print(f"     dat: {pair['dat']}")
+
+============================================================
+CELL 5
+============================================================
+def inspect_channels(rec):
+    """Выводит список всех обнаруженных фазных каналов с их номерами из CFG."""
+    print(f"{'№':<5} | {'Название канала':<20} | {'Тип':<5} | {'Сторона':<10}")
+    print("-" * 50)
+    
+    found_info = {}
+    for i, name in enumerate(rec.analog_channel_ids):
+        n_up = name.upper()
+        
+        # Фильтр фазы и типа
+        phase = next((p for p in ['A', 'B', 'C', 'А', 'В', 'С'] if p in n_up), None)
+        is_u = any(x in n_up for x in ['U', 'У', 'V'])
+        is_i = any(x in n_up for x in ['I', 'И'])
+        
+        if phase and (is_u or is_i):
+            ch_num = i + 1 # Номер как в CFG
+            side = "Secondary" if "SEC" in n_up else "Primary"
+            ch_type = "U" if is_u else "I"
+            
+            print(f"{ch_num:<5} | {name:<20} | {ch_type}{phase:<4} | {side}")
+            found_info[ch_num] = name
+            
+    return found_info
+
+rec = Comtrade()
+rec.load(cfg_path)
+channel_map = inspect_channels(rec)
+
+
+============================================================
+CELL 6
+============================================================
+def parse_comtrade(rec, i_prim_nums: list, i_sec_nums: list, u_prim_nums: list, u_sec_nums: list):
+    """Формирует матрицы сигналов на основе выбранных пользователем номеров каналов."""
+    
+    def get_data_by_nums(nums):
+        # Создаем пустую матрицу 3xN. Если номера не указаны, вернет нули.
+        mat = np.zeros((3, len(rec.time)))
+        for i, num in enumerate(nums[:3]): # Берем только первые 3 номера (A, B, C)
+            mat[i] = rec.analog[num - 1] # -1 так как в массиве индексы с 0
+        return mat
+
+    i_prim = get_data_by_nums(i_prim_nums)
+    i_sec  = get_data_by_nums(i_sec_nums)
+    u_prim = get_data_by_nums(u_prim_nums)
+    u_sec  = get_data_by_nums(u_sec_nums)
+    
+    print("✓ Массивы I_prim, I_sec, U_prim, U_sec успешно сформированы.")
+    return i_prim, i_sec, u_prim, u_sec
+
+# Пример использования:
+i_p_idx = [1, 2, 3]    # Например: CT1IAprim, CT1IBprim, CT1ICprim
+i_s_idx = [13, 14, 15] # Например: CT1IAsec, CT1IBsec, CT1ICsec
+u_p_idx = [31, 32, 33] # Например: S1) VT1UAprim, VT1UBprim, VT1UCprim
+u_s_idx = [37, 38, 39] # Например: S1) VT1UAsec, VT1UBsec, VT1UCsec
+
+I_prim, I_sec, U_prim, U_sec = parse_comtrade(
+    rec, 
+    i_prim_nums=i_p_idx, 
+    i_sec_nums=i_s_idx, 
+    u_prim_nums=u_p_idx, 
+    u_sec_nums=u_s_idx)
+
+# === Формирование единого data-контекста для последующих разделов ===
+IA_filtered = I_prim[0]
+IB_filtered = I_prim[1]
+IC_filtered = I_prim[2]
+UA_filtered = U_prim[0]
+UB_filtered = U_prim[1]
+UC_filtered = U_prim[2]
+
+# Параметры линии и номинальные величины
+Unom_kv = 110.0          # Номинальное напряжение линии, кВ
+S_base_MVA = 100.0       # Базовая мощность для расчёта номинального тока, МВА
+Inom_kA = S_base_MVA / (np.sqrt(3) * Unom_kv)  # Номинальный ток, кА
+
+data = {
+    'fs': rec.cfg.sample_rates[0][0],
+    'frequency': rec.cfg.frequency,
+    'Inom': Inom_kA,
+    'fault_time': None,          # Задайте вручную для проверки точности детекции (сек)
+    'fault_distance_km': None,   # Задайте вручную для расчёта p.u. (км)
+}
+print("✓ Data-контекст создан")
+
+
+============================================================
+CELL 7
+============================================================
+def plot_phases(rec, i_data, u_data, i_nums, u_nums, title="Осциллограммы"):
+    """
+    Визуализация фаз A, B, C с названиями каналов и единицами измерения из CFG.
+    """
+    fig, axes = plt.subplots(3, 2, figsize=(16, 12), sharex=True)
+    
+    time_ms = np.array(rec.time) * 1000
+    colors = ['#d62728', '#2ca02c', '#1f77b4'] # A, B, C
+    
+    # Вспомогательная функция для получения метаданных (название и единица)
+    def get_meta(nums, idx_in_list):
+        try:
+            ch_idx = nums[idx_in_list] - 1
+            channel = rec.cfg.analog_channels[ch_idx]
+            return channel.name, channel.uu
+        except:
+            return f"Channel {idx_in_list}", "?"
+
+    for row in range(3):
+        # --- ТОКИ (Левая колонка) ---
+        name_i, unit_i = get_meta(i_nums, row)
+        ax_i = axes[row, 0]
+        ax_i.plot(time_ms, i_data[row], color=colors[row], lw=1.5)
+        ax_i.set_ylabel(f"[{unit_i}]")
+        ax_i.set_title(f"{name_i}", loc='left', fontweight='bold', fontsize=11)
+        ax_i.grid(True, alpha=0.3)
+        
+        # --- НАПРЯЖЕНИЯ (Правая колонка) ---
+        name_u, unit_u = get_meta(u_nums, row)
+        ax_u = axes[row, 1]
+        ax_u.plot(time_ms, u_data[row], color=colors[row], lw=1.5)
+        ax_u.set_ylabel(f"[{unit_u}]")
+        ax_u.set_title(f"{name_u}", loc='left', fontweight='bold', fontsize=11)
+        ax_u.grid(True, alpha=0.3)
+
+    # Общие подписи осей X
+    axes[2, 0].set_xlabel("Time [ms]")
+    axes[2, 1].set_xlabel("Time [ms]")
+    
+    fig.suptitle(title, fontsize=16, fontweight='bold', y=1.02)
+    plt.tight_layout()
+    plt.show()
+
+# Использование (убедись, что i_p_idx и u_p_idx определены в ячейке выше)
+plot_phases(rec, I_prim, U_prim, i_p_idx, u_p_idx, title="Первичные величины (Primary)")
+
+
+============================================================
+CELL 9
+============================================================
+from scipy import signal
+import pandas as pd
+
+ORDER = 4
+FC = 25.0
+
+def butterworth_highpass(data, fs, fc, order=4):
+    """
+    Фильтр Баттерворта высоких частот (ФВЧ).
+    Удаляет постоянное смещение нуля (DC offset) и медленно меняющуюся апериодику.
+    Для полного подавления апериодической составляющей КЗ рекомендуется fc < 5 Гц.
+    """
+    nyq = 0.5 * fs
+    wn = fc / nyq
+    sos = signal.butter(order, wn, btype='highpass', output='sos')
+    filtered = signal.sosfiltfilt(sos, data, axis=1)
+    return filtered, sos
+
+def remove_dc_period(data, fs, f_net):
+    """
+    Удаление апериодической составляющей методом центрированного
+    скользящего среднего за период сетевой частоты (20 мс для 50 Гц).
+    Этот метод не вносит фазовых искажений и минимизирует краевые артефакты.
+    """
+    period = int(fs / f_net)
+    filtered = np.zeros_like(data)
+    for i in range(data.shape[0]):
+        s = pd.Series(data[i])
+        aper = s.rolling(window=period, center=True, min_periods=1).mean()
+        half = period // 2
+        aper.iloc[:half] = aper.iloc[half:period].mean()
+        aper.iloc[-half:] = aper.iloc[-period:-half].mean()
+        filtered[i] = data[i] - aper.values
+    return filtered
+
+try:
+    FS = rec.cfg.sample_rates[0][0]
+    print(f"Частота дискретизации: {FS}")
+except (AttributeError, IndexError):
+    print("X Частота дискретизации не найдена")
+
+# Центрирование по предыстории (первые 20 мс) перед фильтрацией —
+# стандартная практика для устранения смещения нуля ТТ/ТН
+pre_window = int(0.02 * FS)
+for i in range(3):
+    I_prim[i] -= np.mean(I_prim[i, :pre_window])
+    U_prim[i] -= np.mean(U_prim[i, :pre_window])
+
+# === Выбор метода фильтрации ===
+# Рекомендуется: remove_dc_period (нет краевых артефактов)
+# Альтернатива: butterworth_highpass (FC=25 Гц — только DC offset)
+I_prim_filt = remove_dc_period(I_prim, FS, rec.cfg.frequency)
+U_prim_filt = remove_dc_period(U_prim, FS, rec.cfg.frequency)
+sos_I = sos_U = None  # SOS не используются для метода скользящего среднего
+
+# Обновляем filtered-переменные для следующих разделов
+IA_filtered = I_prim_filt[0]
+IB_filtered = I_prim_filt[1]
+IC_filtered = I_prim_filt[2]
+UA_filtered = U_prim_filt[0]
+UB_filtered = U_prim_filt[1]
+UC_filtered = U_prim_filt[2]
+
+print("✓ Фильтрация выполнена (метод скользящего среднего за период).")
+
+
+============================================================
+CELL 14
+============================================================
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.ndimage import uniform_filter1d
+
+def analyze_signals_full(data_dict, fs=5000, fault_idx=None, threshold=5.0):
+    """
+    Анализ апериодической составляющей.
+    Оценка DC% производится на предыстории (до момента КЗ),
+    где фильтрация должна обеспечивать полное подавление DC.
+    """
+    window_size = int(fs * 0.02)  # окно в 20 мс
+    half_w = window_size // 2
+    results = {}
+    
+    names = list(data_dict.keys())
+    fig, axes = plt.subplots(len(names), 1, figsize=(12, 4 * len(names)))
+    if len(names) == 1:
+        axes = [axes]
+
+    print(f"{'Канал':<12} | {'DC %':<10} | {'Ta (мс)':<10} | {'Статус'}")
+    print("-" * 50)
+
+    for i, name in enumerate(names):
+        signal_full = np.array(data_dict[name]).flatten()
+        
+        # Для оценки DC используем предысторию (до КЗ) или весь сигнал
+        if fault_idx is not None and fault_idx > window_size:
+            eval_sig = signal_full[:fault_idx]
+        else:
+            eval_sig = signal_full
+        
+        if len(eval_sig) > window_size:
+            aper_eval = uniform_filter1d(eval_sig, size=window_size, mode='nearest')
+            sig_eval = eval_sig[half_w:-half_w]
+            aper_eval = aper_eval[half_w:-half_w]
+        else:
+            aper_eval = uniform_filter1d(eval_sig, size=len(eval_sig), mode='nearest')
+            sig_eval = eval_sig
+        
+        ac_eval = sig_eval - aper_eval
+        peak_ac = np.max(np.abs(ac_eval))
+        max_dc = np.max(np.abs(aper_eval))
+        ratio = (max_dc / peak_ac * 100) if peak_ac > 0 else 0
+        
+        abs_dc = np.abs(aper_eval)
+        idx_peak = np.argmax(abs_dc)
+        val_peak = abs_dc[idx_peak]
+        target = val_peak * 0.368
+        ta = 0
+        fragment = abs_dc[idx_peak:]
+        for j, val in enumerate(fragment):
+            if val <= target:
+                ta = (j / fs) * 1000
+                break
+        
+        results[name] = {"ratio": ratio, "ta": ta}
+        status = "⚠️ ВЫСОКАЯ" if ratio > threshold else "✅ НОРМА"
+        ta_display = f"{ta:.1f}" if ta > 0 else "> окна"
+        print(f"{name:<12} | {ratio:>7.2f}% | {ta_display:>9} | {status}")
+
+        ax = axes[i]
+        t_full = np.arange(len(signal_full)) / fs * 1000
+        aper_full = uniform_filter1d(signal_full, size=window_size, mode='nearest')
+        ax.plot(t_full, signal_full, color='gray', alpha=0.4, label='Исходный сигнал')
+        ax.plot(t_full, aper_full, color='red', linewidth=2, label='DC (апериодика)')
+        ax.plot(t_full, signal_full - aper_full, color='blue', alpha=0.7, label='AC (основная)')
+        if fault_idx is not None:
+            ax.axvline(x=fault_idx/fs*1000, color='magenta', linestyle='--', alpha=0.5, label='КЗ')
+        ax.axvspan(0, half_w/fs*1000, color='yellow', alpha=0.1)
+        ax.axvspan(t_full[-1] - half_w/fs*1000, t_full[-1], color='yellow', alpha=0.1)
+        ax.set_title(f"Анализ канала: {name} (DC={ratio:.1f}%, Ta={ta_display} мс)")
+        ax.legend(loc='upper right')
+        ax.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.show()
+    return results
+
+data_to_test = {
+    "IA_filt": np.array(I_prim_filt[0]).flatten(),
+    "IB_filt": np.array(I_prim_filt[1]).flatten(),
+    "IC_filt": np.array(I_prim_filt[2]).flatten(),
+    "UA_filt": np.array(U_prim_filt[0]).flatten(),
+    "UB_filt": np.array(U_prim_filt[1]).flatten(),
+    "UC_filt": np.array(U_prim_filt[2]).flatten()
+}
+
+
+============================================================
+CELL 16
+============================================================
+def detect_fault_inception(ia, ib, ic, ua, ub, uc, fs, f_net, Inom, eta_I=0.5, eta_U=0.85):
+    """Детекция момента КЗ по комбинированному критерию скользящих окон RMS.
+
+    Алгоритм сравнивает RMS тока и напряжения в двух соседних окнах
+    длиной четверть периода (k = fs/(4*f_net)).
+    КЗ фиксируется, когда хотя бы в одной фазе ток резко возрастает
+    (I_post / I_pre > 1 + eta_I), а напряжение падает
+    (U_post / U_pre < eta_U).
+    """
+    k = int(fs / (4 * f_net))
+    n = len(ia)
+
+    def window_rms(x, start, end):
+        return np.sqrt(np.mean(x[start:end]**2))
+
+    I_ratio = np.ones(n)
+    U_ratio = np.ones(n)
+
+    for i in range(k, n - k):
+        I_pre = max(window_rms(ia, i - k, i),
+                    window_rms(ib, i - k, i),
+                    window_rms(ic, i - k, i))
+        I_post = max(window_rms(ia, i, i + k),
+                     window_rms(ib, i, i + k),
+                     window_rms(ic, i, i + k))
+        U_pre = min(window_rms(ua, i - k, i),
+                    window_rms(ub, i - k, i),
+                    window_rms(uc, i - k, i))
+        U_post = min(window_rms(ua, i, i + k),
+                     window_rms(ub, i, i + k),
+                     window_rms(uc, i, i + k))
+
+        I_ratio[i] = I_post / (I_pre + 1e-9) if I_pre > 1e-6 else 1.0
+        U_ratio[i] = U_post / (U_pre + 1e-9) if U_pre > 1e-6 else 1.0
+
+    # Пропускаем первые 2 окна, чтобы исключить ложное срабатывание
+    # на начало записи (включение, коммутационный бросок)
+    skip = 2 * k
+    candidates = np.where((I_ratio > (1.0 + eta_I)) & (U_ratio < eta_U))[0]
+    candidates = candidates[candidates >= skip]
+
+    if len(candidates) == 0:
+        return None, I_ratio, U_ratio
+
+    fault_idx = candidates[0]
+    return fault_idx, I_ratio, U_ratio
+
+ETA_I = 0.5   # рост тока на 50%
+ETA_U = 0.85  # падение напряжения ниже 85%
+
+fault_idx_detected, I_ratio, U_ratio = detect_fault_inception(
+    IA_filtered, IB_filtered, IC_filtered,
+    UA_filtered, UB_filtered, UC_filtered,
+    data['fs'], data['frequency'], data['Inom'], ETA_I, ETA_U
+)
+
+fault_time_detected = fault_idx_detected / data['fs'] if fault_idx_detected is not None else None
+
+print("✓ Детекция КЗ выполнена")
+print(f"  Порог по току: I_post / I_pre > {1.0 + ETA_I:.2f}")
+print(f"  Порог по напряжению: U_post / U_pre < {ETA_U:.2f}")
+if fault_time_detected is not None:
+    print(f"  Обнаружено: отсчёт {fault_idx_detected}, время {fault_time_detected*1000:.2f} мс")
+    if data['fault_time'] is not None:
+        print(f"  Истинное время: {data['fault_time']*1000:.2f} мс")
+        print(f"  Ошибка: {abs(fault_time_detected - data['fault_time'])*1000:.2f} мс")
+else:
+    print("  ⚠️ КЗ не обнаружено")
+
+# Анализ качества фильтрации на предыстории
+results = analyze_signals_full(data_to_test, fs=data['fs'], fault_idx=fault_idx_detected)
+
+
+============================================================
+CELL 19
+============================================================
+T_PRE = 0.050
+T_POST = 0.150
+
+N_PRE = int(T_PRE * data['fs'])
+N_POST = int(T_POST * data['fs'])
+L_WINDOW = N_PRE + N_POST
+
+if fault_idx_detected is None:
+    # Если КЗ не обнаружено — берём центр записи как запасной вариант
+    fault_idx_detected = len(IA_filtered) // 2
+    print("⚠️ КЗ не обнаружено, окно центрировано относительно середины записи")
+
+def extract_window(signal, center, n_pre, n_post):
+    """Извлекает окно фиксированной длины n_pre + n_post с дополнением нулями при выходе за границы."""
+    start = center - n_pre
+    end = center + n_post
+    pad_left = max(0, -start)
+    pad_right = max(0, end - len(signal))
+    valid_start = max(0, start)
+    valid_end = min(len(signal), end)
+    window = np.concatenate([
+        np.zeros(pad_left),
+        signal[valid_start:valid_end],
+        np.zeros(pad_right)
+    ])
+    return window
+
+IA_window = extract_window(IA_filtered, fault_idx_detected, N_PRE, N_POST)
+IB_window = extract_window(IB_filtered, fault_idx_detected, N_PRE, N_POST)
+IC_window = extract_window(IC_filtered, fault_idx_detected, N_PRE, N_POST)
+UA_window = extract_window(UA_filtered, fault_idx_detected, N_PRE, N_POST)
+UB_window = extract_window(UB_filtered, fault_idx_detected, N_PRE, N_POST)
+UC_window = extract_window(UC_filtered, fault_idx_detected, N_PRE, N_POST)
+
+t_window = np.arange(-N_PRE, N_POST) / data['fs'] * 1000
+
+print("✓ Оконирование выполнено")
+print(f"  Предыстория: {T_PRE*1000:.0f} мс = {N_PRE} отсчётов")
+print(f"  Постистория: {T_POST*1000:.0f} мс = {N_POST} отсчётов")
+print(f"  Общая длина: {L_WINDOW} отсчётов")
+
+
+============================================================
+CELL 22
+============================================================
+def fortescue_instantaneous(ia, ib, ic, fs, f_net):
+    """Вычисление мгновенных симметричных составляющих по Фортескю."""
+    L = len(ia)
+    i0 = np.zeros(L)
+    i1 = np.zeros(L)
+    i2 = np.zeros(L)
+    
+    k = int(fs / (3 * f_net))
+    
+    for n in range(L):
+        i0[n] = (ia[n] + ib[n] + ic[n]) / 3
+        
+        idx_b1 = n - k
+        idx_c1 = n - 2*k
+        if idx_b1 >= 0 and idx_c1 >= 0:
+            i1[n] = (ia[n] + ib[idx_b1] + ic[idx_c1]) / 3
+        else:
+            i1[n] = i0[n]
+        
+        idx_b2 = n - 2*k
+        idx_c2 = n - k
+        if idx_b2 >= 0 and idx_c2 >= 0:
+            i2[n] = (ia[n] + ib[idx_b2] + ic[idx_c2]) / 3
+        else:
+            i2[n] = 0
+    
+    return i0, i1, i2
+
+I0, I1, I2 = fortescue_instantaneous(IA_window, IB_window, IC_window, data['fs'], data['frequency'])
+U0, U1, U2 = fortescue_instantaneous(UA_window, UB_window, UC_window, data['fs'], data['frequency'])
+
+print("✓ Симметричные составляющие вычислены")
+print(f"  Сдвиг k = {int(data['fs']/(3*data['frequency']))} отсчётов = 120°")
+
+
+============================================================
+CELL 25
+============================================================
+def classify_fault_type(I1_rms, I2_rms, I0_rms):
+    """Классификация вида КЗ"""
+    ratio_21 = I2_rms / (I1_rms + 1e-10)
+    ratio_01 = I0_rms / (I1_rms + 1e-10)
+    
+    if ratio_21 < 0.15 and ratio_01 < 0.15:
+        fault_type = '3ф'
+        one_hot = np.array([1, 0, 0, 0])
+    elif ratio_21 > 0.7 and ratio_01 < 0.25:
+        fault_type = '2ф'
+        one_hot = np.array([0, 1, 0, 0])
+    elif ratio_21 > 0.7 and ratio_01 > 0.7:
+        fault_type = '1ф-З'
+        one_hot = np.array([0, 0, 0, 1])
+    elif 0.25 < ratio_21 < 0.7 and 0.25 < ratio_01 < 0.7:
+        fault_type = '2ф-З'
+        one_hot = np.array([0, 0, 1, 0])
+    else:
+        fault_type = 'неопределено'
+        one_hot = np.array([0.25, 0.25, 0.25, 0.25])
+    
+    return fault_type, one_hot, (ratio_21, ratio_01)
+
+fault_type, one_hot, ratios = classify_fault_type(I1_rms, I2_rms, I0_rms)
+ratio_21, ratio_01 = ratios
+
+print(f"✓ Классификация: {fault_type}")
+

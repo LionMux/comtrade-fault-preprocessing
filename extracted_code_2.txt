@@ -1,0 +1,99 @@
+============================================================
+CELL 27
+============================================================
+## Раздел 7: Нормализация в per-unit (p.u.)
+
+============================================================
+CELL 30
+============================================================
+## Раздел 8: Формирование итогового тензора
+
+============================================================
+CELL 31
+============================================================
+one_hot_3f = np.full(L_WINDOW, one_hot[0])
+one_hot_2f = np.full(L_WINDOW, one_hot[1])
+one_hot_2fg = np.full(L_WINDOW, one_hot[2])
+one_hot_1fg = np.full(L_WINDOW, one_hot[3])
+
+X = np.array([
+    I1_pu, I2_pu, I0_pu,
+    U1_pu, U2_pu, U0_pu,
+    one_hot_3f, one_hot_2f, one_hot_2fg, one_hot_1fg
+])
+
+y = d_target_pu if d_target_pu is not None else np.nan
+
+print("✓ Итоговый тензор сформирован")
+print(f"  Форма X: {X.shape} (каналы × время)")
+if d_target_pu is not None:
+    print(f"  Целевая переменная y: {y:.4f} p.u.")
+else:
+    print("  Целевая переменная y: не задана (задайте FAULT_DISTANCE_KM)")
+
+
+============================================================
+CELL 32
+============================================================
+# Визуализация итогового тензора
+fig, axes = plt.subplots(5, 2, figsize=(14, 16))
+axes = axes.flatten()
+
+channel_names = [
+    'I₁ (прямая ток)', 'I₂ (обратная ток)', 'I₀ (нулевая ток)',
+    'U₁ (прямая напр.)', 'U₂ (обратная напр.)', 'U₀ (нулевая напр.)',
+    'one-hot: 3ф', 'one-hot: 2ф', 'one-hot: 2ф-З', 'one-hot: 1ф-З'
+]
+
+colors = ['blue', 'orange', 'purple', 'blue', 'orange', 'purple', 
+          'green', 'blue', 'orange', 'red']
+
+for i in range(10):
+    axes[i].plot(t_window, X[i], color=colors[i], linewidth=1.5)
+    axes[i].axvline(x=0, color='magenta', linestyle='--', alpha=0.7)
+    axes[i].set_ylabel(f'Канал {i}')
+    axes[i].set_title(channel_names[i])
+    axes[i].grid(True)
+    
+    if i >= 6:
+        axes[i].text(0.02, 0.5, f'{X[i, 0]:.2f}', 
+                    transform=axes[i].transAxes, fontsize=14,
+                    bbox=dict(boxstyle='round', facecolor='yellow', alpha=0.5))
+
+fig.suptitle(f'Итоговый тензор X ∈ R^(10×{L_WINDOW})\\nЦель: {y:.3f} p.u.', 
+             fontsize=14, fontweight='bold')
+
+for i in [8, 9]:
+    axes[i].set_xlabel('Время от момента КЗ, мс')
+
+plt.tight_layout(rect=[0, 0, 1, 0.97])
+plt.show()
+
+print(f"\n{'Канал':<8} {'Название':<25} {'Диапазон':<20}")
+print("-" * 55)
+for i, name in enumerate(channel_names):
+    min_val, max_val = np.min(X[i]), np.max(X[i])
+    print(f"{i:<8} {name:<25} [{min_val:6.2f}, {max_val:6.2f}]")
+
+print(f"\nЦелевая переменная: y = {y:.4f} p.u. = {y*100:.1f}% от длины линии")
+
+============================================================
+CELL 33
+============================================================
+output_data = {
+    'X': X,
+    'y': y,
+    'metadata': {
+        'fault_type': fault_type,
+        'fault_distance_km': FAULT_DISTANCE_KM,
+        'line_length_km': LINE_PARAMS['L_km'],
+        'sample_rate': data['fs'],
+        'window_samples': L_WINDOW,
+        'channel_names': channel_names
+    }
+}
+
+np.savez('fault_sample_processed.npz', **output_data)
+print("✓ Сохранено в 'fault_sample_processed.npz'")
+
+

@@ -1,0 +1,12 @@
+OK   29_anwar_ensemble_fault_detection_nature2025.pdf (2902715 bytes)
+ERR  21_ghodchar_cnn_medium_voltage.pdf: 403 Client Error: Forbidden for url: https://www.sciencedirect.com/science/article/pii/S2772671124004005/pdfft?md5=07f2a5243398e5753374ae0062687124&pid=1-s2.0-S2772671124004005-main.pdf
+ERR  22_amiri_intelligent_fault_diagnosis.pdf: 403 Client Error: Forbidden for url: https://www.sciencedirect.com/science/article/pii/S0957417424028124/pdfft
+ERR  23_linares_generalizable_fault_detection.pdf: 403 Client Error: Forbidden for url: https://www.sciencedirect.com/science/article/pii/S0306261920308114/pdfft
+ERR  08_yang_cnn_lstm_semanticscholar.pdf: HTTPSConnectionPool(host='pdfs.semanticscholar.org', port=443): Read timed out. (read timeout=60)
+ERR  03_ml_fault_detection_literature_review.pdf: 403 Client Error: Forbidden for url: https://www.preprints.org/manuscript/202405.0265/v1/download
+ERR  03b_ml_fault_detection_literature_review.pdf: 403 Client Error: Forbidden for url: https://www.preprints.org/manuscript/202405.0265/download
+FAIL 05_mdpi_disturbance_inception_time.pdf page HTTP 403
+FAIL 14_mdpi_fault_location_ann_series_compensation.pdf page HTTP 403
+FAIL 18_kulikov_relay_protection_ml_2022.pdf page HTTP 403
+FAIL 19_kulikov_decision_tree_faults_2023.pdf page HTTP 403
+NOPDF 12_cieslak_symmetrical_components_dfr.pdf no pdf link found

@@ -1,0 +1,96 @@
+============================================================
+CELL 28
+============================================================
+# =============================================================================
+# Нормализация в per-unit (p.u.)
+# =============================================================================
+# Задайте нужные значения вручную:
+S_BASE_MVA = 100.0          # Базовая мощность, МВА
+FAULT_DISTANCE_KM = 10.0    # Расстояние до КЗ, км (задайте вручную)
+
+LINE_PARAMS = {
+    'Unom_kv': 110.0,
+    'L_km': 50.0,
+    'r1_ohm_km': 0.1,
+    'x1_ohm_km': 0.4,
+}
+
+U_base_kV = LINE_PARAMS['Unom_kv'] / np.sqrt(3)
+I_base_kA = S_BASE_MVA / (np.sqrt(3) * LINE_PARAMS['Unom_kv'])
+
+print("=== БАЗОВЫЕ ВЕЛИЧИНЫ ===")
+print(f"U_base = {U_base_kV:.2f} кВ (фазное)")
+print(f"I_base = {I_base_kA:.3f} кА")
+print(f"Z₁ = {np.sqrt((LINE_PARAMS['r1_ohm_km']*LINE_PARAMS['L_km'])**2 + (LINE_PARAMS['x1_ohm_km']*LINE_PARAMS['L_km'])**2):.2f} Ом")
+
+I0_pu = I0 / I_base_kA
+I1_pu = I1 / I_base_kA
+I2_pu = I2 / I_base_kA
+U0_pu = U0 / U_base_kV
+U1_pu = U1 / U_base_kV
+U2_pu = U2 / U_base_kV
+
+if FAULT_DISTANCE_KM is not None and LINE_PARAMS['L_km'] > 0:
+    d_target_pu = FAULT_DISTANCE_KM / LINE_PARAMS['L_km']
+    print(f"\nЦель: {FAULT_DISTANCE_KM:.1f} км = {d_target_pu:.3f} p.u.")
+else:
+    d_target_pu = None
+    print("\nЦель: не задана (FAULT_DISTANCE_KM = None)")
+
+
+============================================================
+CELL 29
+============================================================
+fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+
+axes[0, 0].plot(t_window, I1_pu, 'b-', label='I₁')
+axes[0, 0].plot(t_window, I2_pu, 'orange', label='I₂')
+axes[0, 0].plot(t_window, I0_pu, 'purple', label='I₀')
+axes[0, 0].axhline(y=1.0, color='gray', linestyle='--', alpha=0.5)
+axes[0, 0].axvline(x=0, color='magenta', linestyle='--')
+axes[0, 0].set_ylabel('Ток, p.u.')
+axes[0, 0].set_title('Токи в p.u.')
+axes[0, 0].legend()
+axes[0, 0].grid(True)
+
+axes[0, 1].plot(t_window, U1_pu, 'b-', label='U₁')
+axes[0, 1].plot(t_window, U2_pu, 'orange', label='U₂')
+axes[0, 1].plot(t_window, U0_pu, 'purple', label='U₀')
+axes[0, 1].axhline(y=1.0, color='gray', linestyle='--', alpha=0.5)
+axes[0, 1].axvline(x=0, color='magenta', linestyle='--')
+axes[0, 1].set_ylabel('Напряжение, p.u.')
+axes[0, 1].set_title('Напряжения в p.u.')
+axes[0, 1].legend()
+axes[0, 1].grid(True)
+
+categories = ['I₁', 'I₂', 'I₀', 'U₁', 'U₂', 'U₀']
+after = [np.max(np.abs(I1_pu)), np.max(np.abs(I2_pu)), np.max(np.abs(I0_pu)),
+         np.max(np.abs(U1_pu)), np.max(np.abs(U2_pu)), np.max(np.abs(U0_pu))]
+
+x = np.arange(len(categories))
+axes[1, 0].bar(x, after, color=['blue', 'orange', 'purple', 'blue', 'orange', 'purple'])
+axes[1, 0].set_ylabel('Амплитуда, p.u.')
+axes[1, 0].set_title('Максимальные значения в p.u.')
+axes[1, 0].set_xticks(x)
+axes[1, 0].set_xticklabels(categories)
+axes[1, 0].grid(True, axis='y')
+
+if d_target_pu is not None:
+    axes[1, 1].barh(['Расстояние'], [d_target_pu], color='green', edgecolor='black', height=0.3)
+    axes[1, 1].set_xlim([0, 1])
+    axes[1, 1].set_xlabel('p.u.')
+    axes[1, 1].set_title(f'Цель: {d_target_pu:.3f} p.u.')
+    axes[1, 1].text(d_target_pu/2, 0, f'{FAULT_DISTANCE_KM:.1f} км', 
+                    ha='center', va='center', fontsize=14, fontweight='bold', color='white')
+    axes[1, 1].set_yticks([])
+else:
+    axes[1, 1].text(0.5, 0.5, 'Цель не задана', ha='center', va='center', transform=axes[1, 1].transAxes, fontsize=14)
+    axes[1, 1].set_title('Цель: не задана')
+
+plt.tight_layout()
+plt.show()
+
+print(f"Макс I₁ после КЗ: {np.max(np.abs(I1_pu[N_PRE:])):.2f} p.u.")
+print(f"Мин U₁ после КЗ: {np.min(np.abs(U1_pu[N_PRE:])):.2f} p.u.")
+
+

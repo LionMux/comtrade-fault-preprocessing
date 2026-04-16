@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "skills": {
+    "discovery-interview": {
+      "source": "parcadei/Continuous-Claude-v3",
+      "sourceType": "github",
+      "computedHash": "934f3f1a7dd3a35e3a74f5716242ca2642a0efc6bee4f0c5f8b2233d7aefa9f3"
+    },
+    "interview-prep": {
+      "source": "RightNow-AI/openfang",
+      "sourceType": "github",
+      "computedHash": "a5f3419261c5105b1f027e548552153704f281f76f4f3eeae0f2c630f8fe1a71"
+    },
+    "ml-engineer": {
+      "source": "RightNow-AI/openfang",
+      "sourceType": "github",
+      "computedHash": "541f720abbcf02dd8412e427951cb5cb48f64dca7b5b574cbb3160089a051793"
+    },
+    "prompt-engineer": {
+      "source": "RightNow-AI/openfang",
+      "sourceType": "github",
+      "computedHash": "fcaa47978ac1785b5cf7c7e2467d2f4ea154fc40d3ff3bb64eb784f99ac0522b"
+    },
+    "web-search": {
+      "source": "RightNow-AI/openfang",
+      "sourceType": "github",
+      "computedHash": "c905fbe590449e2bdb2e2909c64aeb296443c433165fab17d0c8d0d0ea4cc41d"
+    }
+  }
+}

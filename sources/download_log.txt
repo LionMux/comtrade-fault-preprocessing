@@ -1,0 +1,28 @@
+OK   01_nature_dataset_oscillograms.pdf (3958016 bytes)
+OK   02_martinez_velasco_survey_ai_faults.pdf (1962599 bytes)
+FAIL 03_ml_fault_detection_literature_review.pdf HTTP 403 size 414
+OK   04_li_incipient_fault_detection.pdf (40365906 bytes)
+FAIL 05_mdpi_disturbance_inception_time.pdf HTTP 403 size 410
+FAIL 06_silva_rms_voltage_disturbances.pdf HTTP 403 size 7491
+OK   07_yang_cnn_lstm_dc_fault_diagnosis.pdf (26016674 bytes)
+ERR  08_yang_cnn_lstm_semanticscholar.pdf: HTTPSConnectionPool(host='pdfs.semanticscholar.org', port=443): Read timed out.
+OK   09_ieee_deep_learning_fault_diagnosis.pdf (7330 bytes)
+OK   10_tudelft_integrated_fault_detection_pmu.pdf (4667888 bytes)
+ERR  11_mahzarnia_resnet_warm_start.pdf: HTTPSConnectionPool(host='overbye.engr.tamu.edu', port=443): Max retries exceeded with url: /wp-content/uploads/sites/146/2025/08/NAPS_October-2025_Warm-Start-State-Estimation-in-Power-Systems-Using-Deep-Residual-Networks-A-Comparative-Study-Against-CNN-LSTM-and-GAN.pdf (Caused by NameResolutionError("HTTPSConnection(host='overbye.engr.tamu.edu', port=443): Failed to resolve 'overbye.engr.tamu.edu' ([Errno 11001] getaddrinfo failed)"))
+FAIL 12_cieslak_symmetrical_components_dfr.pdf HTTP 500 size 0
+OK   13_stepanova_deep_learning_relay_protection.pdf (3758990 bytes)
+FAIL 14_mdpi_fault_location_ann_series_compensation.pdf HTTP 403 size 408
+HTML 15_mondal_cnn_power_quality.pdf (possible paywall, saved as _html.pdf) 324409 bytes
+OK   16_tang_waveform_split_recognition.pdf (31925820 bytes)
+OK   17_gogula_hilbert_transform_hif.pdf (3421007 bytes)
+FAIL 18_kulikov_relay_protection_ml_2022.pdf HTTP 403 size 410
+FAIL 19_kulikov_decision_tree_faults_2023.pdf HTTP 403 size 410
+HTML 20_shakiba_ml_survey.pdf (possible paywall, saved as _html.pdf) 469909 bytes
+FAIL 21_ghodchar_cnn_medium_voltage.pdf HTTP 403 size 832790
+FAIL 22_amiri_intelligent_fault_diagnosis.pdf HTTP 403 size 832790
+FAIL 23_linares_generalizable_fault_detection.pdf HTTP 403 size 832790
+OK   24_arxiv_lssvm_fault_classification.pdf (374615 bytes)
+ERR  25_ijert_parks_transformation_faults.pdf: ('Connection aborted.', ConnectionResetError(10054, 'Удаленный хост принудительно разорвал существующее подключение', None, 10054, None))
+OK   26_ijsrd_fault_detection_ai.pdf (432959 bytes)
+OK   27_eepir_fault_classification_sv_html.txt (241788 bytes)
+OK   28_dissercat_info_aspects_fault_location_html.txt (141961 bytes)
