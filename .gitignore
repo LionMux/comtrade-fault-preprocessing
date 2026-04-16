@@ -86,6 +86,7 @@ filtered_data.cfg
 filtered_data.dat
 
 # Anaconda / Jupyter
+anaconda_projects/
 .anaconda_projects/
 .jupyter/
 .jupyter_ystore.db
